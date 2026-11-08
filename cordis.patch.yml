@@ -1,0 +1,40 @@
+# Companion bundle for DSH Desktop / Web.
+#
+# Two components, one product:
+#   remote-relay   the desktop agent that keeps an outbound WebSocket to the relay
+#   mobile-access  DSH Mobile's gateway, mounted through our own module so that
+#                  only this package's UI (the 远程 panel) is published
+#
+# DSH publishes the client bundle of the package an entry names, so pointing at
+# ./lib/mobile-host.mjs keeps DSH Mobile's own sidebar entry out of the app
+# without forking it. Installing dsh-mobile as a separate bundle alongside this
+# one would register a second gateway and a second sidebar entry.
+- insert:
+    - id: remote-relay
+      name: dsh-remote-relay
+      inject: [webServer]
+      config:
+        # Required: your own relay and the domain its static shell answers on.
+        # Nothing here has a usable default, because the relay is self-hosted.
+        relayUrl: https://relay.example.com:8443
+        shellBaseDomain: app.example.com
+        shellPort: 8443
+        backendUrl: http://127.0.0.1:3444
+        configFile: !!js dshHomePath('remote-relay/config.json')
+        autoStart: true
+
+    - id: mobile-access
+      name: ./lib/mobile-host.mjs
+      inject: [webServer, connection, commands]
+      config:
+        setupFile: !!js dshHomePath('mobile-access/setup.json')
+        stateFile: !!js dshHomePath('mobile-access/devices.json')
+        controlFile: !!js dshHomePath('mobile-access/control.json')
+        customCssFile: !!js dshHomePath('mobile-access/mobile.css')
+        customScriptFile: !!js dshHomePath('mobile-access/mobile.js')
+        initiallyEnabled: false
+        listenHost: 127.0.0.1
+        listenPort: 3444
+        allowedCidrs: [127.0.0.0/8]
+        tls:
+          mode: disabled

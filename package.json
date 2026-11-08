@@ -1,0 +1,91 @@
+{
+  "name": "dsh-remote-relay",
+  "version": "0.4.0",
+  "description": "Zero-config remote access for DSH Mobile: a self-hostable relay plus a DSH plugin that configures mobile access and hands you a QR code.",
+  "type": "module",
+  "main": "./lib/plugin.mjs",
+  "exports": {
+    ".": "./lib/plugin.mjs",
+    "./client": "./lib/client.js",
+    "./relay": "./lib/relay.mjs",
+    "./agent": "./lib/agent.mjs",
+    "./e2e-agent": "./lib/e2e-agent.mjs",
+    "./e2e-pairing": "./lib/e2e-pairing.mjs",
+    "./e2e-protocol": "./lib/e2e-protocol.mjs",
+    "./protocol": "./lib/protocol.mjs",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "bin": {
+    "dsh-remote-relay": "./bin/relay.mjs",
+    "dsh-remote-agent": "./bin/agent.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    }
+  },
+  "files": [
+    "lib/agent.mjs",
+    "lib/client.js",
+    "lib/e2e-agent.mjs",
+    "lib/e2e-pairing.mjs",
+    "lib/e2e-protocol.mjs",
+    "lib/mobile-access.mjs",
+    "lib/mobile-host.mjs",
+    "lib/plugin.mjs",
+    "lib/protocol.mjs",
+    "lib/relay.mjs",
+    "lib/shell/cookie-shim.js",
+    "lib/shell/index.html",
+    "lib/shell/sw.js",
+    "lib/shell/ws-shim.js",
+    "bin/relay.mjs",
+    "bin/agent.mjs",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "dsh-mobile": "0.8.4",
+    "qrcode": "^1.5.4",
+    "ws": "^8.22.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/mobile-access.test.mjs test/client.test.mjs test/e2e-pairing.test.mjs && E2E_BACKEND_PORT=13444 E2E_RELAY_PORT=18787 node test/e2e.mjs && node test/e2e-crypto.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-mobile",
+    "remote-access",
+    "relay",
+    "tunnel"
+  ],
+  "license": "MIT"
+}

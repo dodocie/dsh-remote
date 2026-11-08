@@ -1,0 +1,15 @@
+# Build output and dependencies
+node_modules/
+dist/
+
+# Scratch spikes: they carry live device ids, host keys and shell tokens
+# from whichever machine they were run on, so they stay out of the repo.
+spike/
+
+# Pairing artefacts minted during testing (they embed one-time tokens)
+pairing-qr.png
+pairing-qr.svg
+
+# Local noise
+*.log
+.DS_Store

@@ -1,0 +1,47 @@
+# Caddy in front of dsh-remote-relay.
+#
+# Single-tenant beta: one desktop owns api.example.com. This is the easiest
+# way to get a working public origin without wildcard DNS.
+#
+# Multi-tenant: uncomment the relay.* / *.relay.* block and point
+#   relay.example.com     A/AAAA -> this server
+#   *.relay.example.com   A/AAAA -> this server
+# at your DNS provider. Caddy will obtain a certificate per device on demand.
+# You can replace on-demand TLS with a wildcard certificate if you prefer.
+
+{
+	email admin@example.com
+	on_demand_tls {
+		# The relay answers 200 for the base host and for registered devices.
+		ask http://relay:8787/api/v1/tls-ask
+	}
+}
+
+# --- single-tenant ---------------------------------------------------------
+api.example.com {
+	encode zstd gzip
+	reverse_proxy relay:8787 {
+		flush_interval -1
+	}
+}
+
+# --- multi-tenant ----------------------------------------------------------
+# relay.example.com, *.relay.example.com {
+# 	tls {
+# 		on_demand
+# 	}
+# 	encode zstd gzip
+# 	reverse_proxy relay:8787 {
+# 		flush_interval -1
+# 	}
+# }
+# --- E2E shell (D path) ------------------------------------------------------
+# Static shell for <id>.app.example.com. It must be served from an origin the
+# relay does not control at request time; the relay only carries ciphertext.
+# Needs a certificate covering *.app.example.com (wildcard or on-demand).
+#
+# *.app.example.com:8443 {
+#     root * /srv/dsh-remote/shell
+#     file_server
+#     header Service-Worker-Allowed "/"
+# }

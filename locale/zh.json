@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "手机远程中继",
+    "description": "给 DSH Mobile 一个开箱即用的公网地址，无需 Cloudflare 或 Tailscale。"
+  }
+}

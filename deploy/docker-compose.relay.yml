@@ -1,0 +1,30 @@
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.relay
+    image: dsh-remote-relay:latest
+    container_name: dsh_relay
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN to your relay domain}
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
+      SINGLE_TENANT: ${SINGLE_TENANT:-1}
+      PUBLIC_SCHEME: https
+      PUBLIC_PORT: ${PUBLIC_PORT:-8443}
+      DATA_FILE: /data/devices.json
+      DEV_DOMAINS: localhost,lvh.me
+      SIGNUP_TOKEN: ${SIGNUP_TOKEN:-}
+    volumes:
+      - relay_data:/data
+    networks:
+      - deploy_default
+
+volumes:
+  relay_data:
+
+networks:
+  deploy_default:
+    external: true

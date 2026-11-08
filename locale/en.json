@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Phone relay",
+    "description": "A zero-config public endpoint for DSH Mobile without Cloudflare or Tailscale."
+  }
+}

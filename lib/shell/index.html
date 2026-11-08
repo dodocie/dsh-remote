@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>DSH Remote</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    background: #0f1115;
+    color: #e6e8ec;
+    font: 15px/1.6 -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  }
+  main { width: min(360px, 86vw); text-align: center; }
+  .mark {
+    width: 56px; height: 56px; margin: 0 auto 18px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #8b5cf6, #22d3ee);
+    display: grid; place-items: center;
+    font-weight: 700; font-size: 22px; color: #fff;
+  }
+  h1 { font-size: 17px; margin: 0 0 6px; font-weight: 600; }
+  p { margin: 0; color: #98a2b3; font-size: 13px; word-break: break-word; }
+  p.error { color: #f97066; }
+  .spinner {
+    width: 18px; height: 18px; margin: 22px auto 0;
+    border: 2px solid rgba(255, 255, 255, .15);
+    border-top-color: #8b5cf6;
+    border-radius: 50%;
+    animation: spin 800ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  button {
+    display: none;
+    margin: 18px auto 0;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 1px solid #2c313b;
+    background: #1f232b;
+    color: #e6e8ec;
+    font: inherit;
+  }
+  button.show { display: block; }
+  @media (prefers-color-scheme: light) {
+    body { background: #f6f7f9; color: #1b1f24; }
+    p { color: #667085; }
+    button { border-color: #d0d5dd; background: #fff; color: #1b1f24; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark">D</div>
+  <h1>DSH Remote</h1>
+  <p id="state">正在启动安全壳…</p>
+  <div class="spinner" id="spinner"></div>
+  <button id="retry" type="button">重新加载</button>
+</main>
+<script>
+(async () => {
+  const state = document.getElementById('state');
+  const spinner = document.getElementById('spinner');
+  const retry = document.getElementById('retry');
+
+  function fail(message) {
+    state.className = 'error';
+    state.textContent = message;
+    spinner.style.display = 'none';
+    retry.classList.add('show');
+  }
+
+  retry.addEventListener('click', () => location.reload());
+
+  if (!('serviceWorker' in navigator)) {
+    fail('此浏览器不支持 Service Worker。');
+    return;
+  }
+
+  const params = new URLSearchParams(location.search);
+  const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+  // A home-screen icon is often saved from the address bar of the running app,
+  // i.e. at "/" without the #e2e payload, and iOS drops the payload from an
+  // icon saved that way. Recover the last payload this browser booted with, and
+  // when there is none walk /go.html (which mints a fresh one) instead of
+  // dead-ending on an error the user cannot act on.
+  let remembered = null;
+  try { remembered = JSON.parse(localStorage.getItem('dsh-e2e-link') || 'null'); } catch {}
+  const hashed = hashParams.get('e2e') || '';
+  const e2e = hashed || (remembered && remembered.e2e) || '';
+  const app = hashParams.get('app') || (remembered && remembered.app) || '/';
+  const fromMemory = !hashed && Boolean(e2e);
+  if (!e2e) {
+    location.replace('/go.html');
+    return;
+  }
+  let swUrl = '/sw.js?e2e=' + encodeURIComponent(e2e);
+  for (const key of ['inject', 'csp', 'diag', 'nocache']) {
+    const value = hashParams.get(key);
+    if (value) swUrl += '&' + key + '=' + encodeURIComponent(value);
+  }
+
+  function sessionAlive() {
+    return new Promise((resolve) => {
+      const controller = navigator.serviceWorker.controller;
+      if (!controller) { resolve(false); return; }
+      let settled = false;
+      const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+      try {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = (event) => finish(Boolean(event.data && event.data.ok));
+        controller.postMessage({ t: 'e2e-session' }, [channel.port2]);
+      } catch { finish(false); }
+      setTimeout(() => finish(false), 4000);
+    });
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.register(swUrl, { scope: '/', updateViaCache: 'none' });
+    await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('安全壳启动超时，请重新打开链接')), 15000)),
+    ]);
+    if (registration.installing || registration.waiting) {
+      await Promise.race([
+        new Promise((resolve) => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    }
+    if (!navigator.serviceWorker.controller) {
+      await Promise.race([
+        new Promise((resolve) => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]);
+    }
+    // A device pairs once. The link in the QR carries a one-time pairing token,
+    // so walking it again after the token is spent lands on the manual code
+    // screen. Ask the gateway to renew instead: success means this device still
+    // holds a live session and can go straight to the app.
+    // Keep the payload for the next launch of a saved icon that carries none.
+    try { localStorage.setItem('dsh-e2e-link', JSON.stringify({ e2e, app })); } catch {}
+    // Entering from the entry page is a fresh start: the app otherwise persists
+    // whatever conversation was open (dsh.sessions.current) and a cold launch
+    // drops the user back into it instead of the home screen.
+    try { localStorage.removeItem('dsh.sessions.current'); } catch {}
+    const target = (await sessionAlive()) ? '/' : app;
+    state.textContent = target === '/' ? '正在打开 DSH…' : '正在打开配对页…';
+    location.replace(target);
+  } catch (error) {
+    // A remembered payload can be stale (the relay minted a new shell token), so
+    // retry once through /go.html before showing the error.
+    if (fromMemory) { location.replace('/go.html'); return; }
+    fail('连接失败：' + (error.message || error));
+  }
+})();
+</script>
+</body>
+</html>
