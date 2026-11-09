@@ -115,7 +115,26 @@ class ShellClient {
     }
     if (message.t === 'enc') {
       this.onEncrypted(message);
+      return;
     }
+    if (message.t === 'pong') {
+      this.onPong?.(message);
+    }
+  }
+
+  ping() {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.onPong = undefined;
+        resolve(null);
+      }, 2000);
+      this.onPong = (message) => {
+        clearTimeout(timer);
+        this.onPong = undefined;
+        resolve(message);
+      };
+      this.ws.send(JSON.stringify({ t: 'ping', at: 12345 }));
+    });
   }
 
   onHelloAck(message) {
@@ -218,6 +237,17 @@ class ShellClient {
     });
   }
 
+  async websocketHold() {
+    const id = 'ws-' + (++this.nextId);
+    return new Promise((resolve, reject) => {
+      const entry = { resolve, reject };
+      this.pending.set(id, entry);
+      entry.onOpen = () => resolve(id);
+      entry.onClose = (code, reason) => reject(new Error('ws closed ' + code + ' ' + reason));
+      this.sendInner({ t: 'ws-open', id, path: '/ws', protocols: [] });
+    });
+  }
+
   async websocketEcho() {
     const id = 'ws-' + (++this.nextId);
     return new Promise((resolve, reject) => {
@@ -315,8 +345,23 @@ try {
   const cookies = await shell.request({ path: '/cookies' });
   assert(Array.isArray(cookies.headers['set-cookie']) && cookies.headers['set-cookie'].length === 2, 'set-cookie count');
 
+  const pong = await shell.ping();
+  assert(pong && pong.at === 12345, 'tunnel ping echo');
+
   const wsReply = await shell.websocketEcho();
   assert(wsReply === 'hello-ws', 'ws echo ' + wsReply);
+
+  // A closed phone shell must tear down the backend sockets it opened. Without
+  // this reset the desktop keeps the mux WebSocket alive after the phone is
+  // frozen/backgrounded, so a resumed page believes its event stream is live.
+  const held = await shell.websocketHold();
+  assert(held, 'held websocket opened');
+  await sleep(100);
+  assert(backend.wsClients.size === 1, 'backend holds one websocket, got ' + backend.wsClients.size);
+  shell.close();
+  const closeDeadline = Date.now() + 5000;
+  while (backend.wsClients.size > 0 && Date.now() < closeDeadline) await sleep(50);
+  assert(backend.wsClients.size === 0, 'backend websocket closed after shell disconnect');
 
   console.log('e2e-crypto: PASS');
 } finally {

@@ -48,15 +48,26 @@ export async function startMockBackend(port = 3444) {
   });
 
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+  const wsClients = new Set();
+  // A manual handleUpgrade does not emit 'connection' on a noServer server; the
+  // upgrade callback is the only place that sees every accepted socket.
+  const track = (ws) => {
+    wsClients.add(ws);
+    ws.on('close', () => {
+      wsClients.delete(ws);
+    });
+  };
   server.on('upgrade', (req, socket, head) => {
     if (req.url === '/ws') {
       wss.handleUpgrade(req, socket, head, (ws) => {
+        track(ws);
         ws.on('message', (data, isBinary) => ws.send(data, { binary: isBinary }));
       });
       return;
     }
     if (req.url === '/ws-headers') {
       wss.handleUpgrade(req, socket, head, (ws) => {
+        track(ws);
         ws.send(JSON.stringify({ host: req.headers.host, origin: req.headers.origin }));
       });
       return;
@@ -80,6 +91,7 @@ export async function startMockBackend(port = 3444) {
 
   return {
     port,
+    wsClients,
     async close() {
       await new Promise((resolve) => wss.close(() => resolve()));
       await new Promise((resolve) => server.close(() => resolve()));
